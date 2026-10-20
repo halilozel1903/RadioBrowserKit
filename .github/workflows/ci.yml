@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  swift:
+    name: Swift tests (macOS)
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+      - name: Toolchain
+        run: |
+          swift --version
+          xcodebuild -version
+      - name: Build
+        run: swift build
+      - name: Test
+        run: swift test
+
+  test:
+    name: Tests (${{ matrix.platform }})
+    runs-on: macos-26
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [tvOS, iOS]
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build & test on ${{ matrix.platform }} Simulator
+        run: bash scripts/test.sh ${{ matrix.platform }}
+
+  example:
+    name: Example apps
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Install tvOS platform if missing
+        run: |
+          if ! xcrun simctl list runtimes available | grep -q tvOS; then
+            xcodebuild -downloadPlatform tvOS
+          fi
+      - name: Generate project
+        working-directory: Example
+        run: xcodegen generate
+      - name: Build for macOS
+        run: |
+          xcodebuild build \
+            -project Example/RadioBrowserDemo.xcodeproj \
+            -scheme WavelengthMac \
+            -destination 'platform=macOS' \
+            CODE_SIGNING_ALLOWED=NO
+      - name: Build for tvOS Simulator
+        run: |
+          xcodebuild build \
+            -project Example/RadioBrowserDemo.xcodeproj \
+            -scheme WavelengthTV \
+            -destination 'generic/platform=tvOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO
+
+  screenshots:
+    name: README screenshots
+    if: github.event_name != 'pull_request'
+    needs: [swift, test, example]
+    runs-on: macos-26
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate project
+        working-directory: Example
+        run: xcodegen generate
+      - name: Check the live API
+        run: |
+          # Only log lines: the capture steps below fail on their own when the API is down.
+          curl -sS -A "RadioBrowserKit/1.0" -o /dev/null -w "servers: HTTP %{http_code}\n" \
+            https://all.api.radio-browser.info/json/servers || true
+          curl -sS -A "RadioBrowserKit/1.0" -o /dev/null -w "de1 stats: HTTP %{http_code}\n" \
+            https://de1.api.radio-browser.info/json/stats || true
+      # Live stations and favicons from Radio Browser; writes mac-browse.png and mac-search.png.
+      - name: Capture Mac screenshots
+        run: bash scripts/screenshots-mac.sh WavelengthMac browse search
+      # Live stations and favicons from Radio Browser; writes tv-home.png and tv-nowplaying.png.
+      - name: Capture Apple TV screenshots
+        run: >-
+          bash scripts/screenshots.sh RadioBrowserDemo
+          --tv WavelengthTV io.github.halilozel1903.WavelengthTV home nowplaying
+      - name: Commit screenshots
+        run: |
+          git config user.name "Halil Özel"
+          git config user.email "halilozel1903@gmail.com"
+          git add docs/screenshots
+          if git diff --cached --quiet; then
+            echo "Screenshots unchanged"
+          else
+            git commit -m "Update README screenshots [skip ci]"
+            git push
+          fi

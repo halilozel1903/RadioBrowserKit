@@ -1,0 +1,5 @@
+[
+  {"name": "english", "iso_639": "en", "stationcount": 8123},
+  {"name": "german", "iso_639": "de", "stationcount": 3500},
+  {"name": "esperanto", "iso_639": null, "stationcount": 12}
+]

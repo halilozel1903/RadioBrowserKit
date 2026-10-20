@@ -1,0 +1,6 @@
+[
+  {"ip": "203.0.113.10", "name": "de1.api.radio-browser.info"},
+  {"ip": "2001:db8::10", "name": "de1.api.radio-browser.info"},
+  {"ip": "203.0.113.20", "name": "fi1.api.radio-browser.info"},
+  {"ip": "203.0.113.30", "name": "AT1.api.radio-browser.info"}
+]
