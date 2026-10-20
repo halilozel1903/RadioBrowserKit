@@ -97,6 +97,12 @@ final class RadioStore {
         if current == .loaded, !force { return }
         phases[list] = .loading
         screenshotLog("loading \(list)")
+        // An unstructured task, so a view that redraws and restarts its `.task` doesn't cancel a
+        // load that is already on its way; later callers see the result.
+        await Task { await self.fetchAndStore(list) }.value
+    }
+
+    private func fetchAndStore(_ list: StationList) async {
         do {
             let client = self.client
             var stations = try await Self.retrying(attempts: attempts) {
@@ -111,6 +117,14 @@ final class RadioStore {
                 stations = favicons.ranked(candidates)
             }
             lists[list] = stations
+            if prefersLoadedFavicons, player.station == nil, let first = stations.first {
+                // Screenshot scenes show the first station in the player, ready to play; no audio
+                // plays. Done here, not in a view, so a view that redraws can't skip it.
+                switch list {
+                case .topClicked, .search: player.select(first)
+                default: break
+                }
+            }
             phases[list] = .loaded
             screenshotLog("loaded \(list): \(stations.count) stations, \(favicons.loadedCount(in: stations)) favicons")
         } catch is CancellationError {

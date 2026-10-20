@@ -214,7 +214,13 @@ struct SearchScreen: View {
     let scene: ScreenshotScene?
 
     @Environment(RadioStore.self) private var store
-    @State private var submitted = ""
+    @State private var submitted: String
+
+    init(text: Binding<String>, scene: ScreenshotScene?) {
+        _text = text
+        self.scene = scene
+        _submitted = State(initialValue: text.wrappedValue)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -243,9 +249,6 @@ struct SearchScreen: View {
                     scene: scene
                 )
             }
-        }
-        .onAppear {
-            if submitted.isEmpty { submitted = text }
         }
         .task(id: submitted) {
             let query = submitted.trimmingCharacters(in: .whitespaces)
