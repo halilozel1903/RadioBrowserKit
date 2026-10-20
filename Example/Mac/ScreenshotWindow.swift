@@ -1,8 +1,12 @@
 import AppKit
 import SwiftUI
 
-/// Prepares the window of a screenshot scene: a fixed size of 1440 × 900 points, centered, dark,
-/// no state restoration, the app in front.
+/// Prepares the window of a screenshot scene: 1440 × 900 points, or as much of that as fits on the
+/// screen, centered, dark, no state restoration, the app in front.
+///
+/// The CI runner's display is 1024 × 768 points at 1x. A 1440-point window does not fit there, so
+/// macOS shrinks it and `screencapture` returns a 1024-pixel-wide image; the window is sized to the
+/// visible screen up front so that the capture shows the whole window, title bar included.
 ///
 /// scripts/screenshots-mac.sh waits for the ready marker, then captures the window with
 /// `screencapture -l <window id>`. When that fails it launches the scene again with
@@ -38,8 +42,12 @@ struct ScreenshotWindow: NSViewRepresentable {
 
             window.appearance = NSAppearance(named: .darkAqua)
             window.isRestorable = false
-            window.setContentSize(NSSize(width: 1440, height: 900))
+            let visible = (window.screen ?? NSScreen.main)?.visibleFrame
+                ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+            let size = NSSize(width: min(1440, visible.width), height: min(900, visible.height))
+            window.setFrame(NSRect(origin: visible.origin, size: size), display: true)
             window.center()
+            print("Screenshot window: \(Int(size.width)) x \(Int(size.height)) points on a \(Int(visible.width)) x \(Int(visible.height)) visible screen")
             NSApplication.shared.setActivationPolicy(.regular)
             NSApplication.shared.activate()
             window.makeKeyAndOrderFront(nil)
@@ -86,8 +94,8 @@ enum ScreenshotRenderer {
         bitmap.size = bounds.size
         view.cacheDisplay(in: bounds, to: bitmap)
 
-        guard distinctColorCount(in: bitmap) > 120 else {
-            return fail("The rendered image is blank or has no artwork in it")
+        guard distinctColorCount(in: bitmap) > 200 else {
+            return fail("The rendered image is blank or has no favicons in it")
         }
         guard let png = bitmap.representation(using: .png, properties: [:]) else {
             return fail("Could not encode the PNG")

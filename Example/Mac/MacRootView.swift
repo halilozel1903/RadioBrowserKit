@@ -41,6 +41,18 @@ struct MacRootView: View {
             await store.loadDirectory()
         }
         .signalsScreenshotReady(scene, when: isScreenshotReady)
+        .onChange(of: readinessSummary) { _, summary in
+            screenshotLog(summary)
+        }
+    }
+
+    /// What the screenshot scene is waiting for, for the CI log.
+    private var readinessSummary: String {
+        guard let scene else { return "" }
+        let list: StationList = scene == .search ? .search(ScreenshotScene.searchText) : .topClicked
+        let stations = Array(store.stations(list).prefix(12))
+        return "selection \(String(describing: selection)), directory \(store.directoryPhase), \(list) \(store.phase(list)), "
+            + "player \(store.player.station?.name ?? "none"), favicons \(store.favicons.loadedCount(in: stations))/\(stations.count)"
     }
 
     // MARK: - Sidebar
@@ -107,9 +119,15 @@ struct MacRootView: View {
 
     // MARK: - Detail
 
+    /// The selection, or the scene's item when the list has none (a screenshot scene must not
+    /// depend on the table view keeping its selection).
+    private var shownItem: SidebarItem {
+        selection ?? (scene == .search ? .search : .top)
+    }
+
     @ViewBuilder
     private var detail: some View {
-        switch selection ?? .top {
+        switch shownItem {
         case .top:
             StationGridScreen(
                 list: .topClicked,

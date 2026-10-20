@@ -50,6 +50,13 @@ enum ScreenshotScene: String, CaseIterable, Sendable {
     }
 }
 
+/// Writes a progress line to standard error in screenshot scenes. Unlike `print`, it is not
+/// buffered, so the CI log shows how far a scene got even when the app is killed.
+func screenshotLog(_ message: @autoclosure () -> String) {
+    guard ScreenshotScene.current != nil else { return }
+    FileHandle.standardError.write(Data(("[screenshot] " + message() + "\n").utf8))
+}
+
 /// Called once a screenshot scene is on screen, on the Mac to render the window as a fallback.
 @MainActor
 enum ScreenshotReadiness {
@@ -66,6 +73,7 @@ extension View {
             // Let the grid lay out and the images fade in.
             try? await Task.sleep(for: .seconds(2))
             guard !Task.isCancelled else { return }
+            screenshotLog("\(scene.rawValue) is ready")
             do {
                 try scene.rawValue.write(to: ScreenshotScene.readyMarkerURL, atomically: true, encoding: .utf8)
                 print("Screenshot scene \(scene.rawValue) is ready")

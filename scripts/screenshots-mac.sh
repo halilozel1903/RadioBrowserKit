@@ -5,14 +5,17 @@
 # saving a blank or broken capture.
 #
 # Launched with `-screenshot <scene>`, the app opens a 1440 x 900 window on a fixed scene, loads
-# live stations from the Radio Browser API and their real favicons, and writes the file given
-# with `-screenshot-ready-file` once the data and the favicons on screen are loaded.
+# live stations from the Radio Browser API and their real favicons, and writes
+# the file given with `-screenshot-ready-file` once the data and every image on screen are loaded.
 #
 # 1. Preferred: `screencapture -l <window id>` of the window, with the id looked up by
 #    scripts/window-id.swift (CGWindowListCopyWindowInfo, filtered by the app's process id).
 # 2. Fallback: `-render-screenshot <file>` makes the app draw its window into a PNG itself
 #    (NSView.cacheDisplay at 2x) once the scene is ready, and quit. It needs no Screen Recording
-#    permission. It shows the same live scene; it only runs when 1 fails.
+#    permission. It shows the same live scene; it only runs when 1 fails. It may not draw the
+#    translucent sidebar of macOS 26 (cacheDisplay can leave it a blank white panel; the app gives
+#    its sidebar an opaque background for that reason) and leaves out
+#    the title bar, so 1 is what the README should show.
 set -euo pipefail
 
 SCHEME="$1"; shift
@@ -22,8 +25,12 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$OUT"
 
-MIN_BYTES=120000  # a window without favicons compresses to far less
-MIN_WIDTH=1200    # pixels; the window is 1440 points wide
+MIN_BYTES=100000  # a window without favicons compresses to far less
+# pixels. The window is 1440 points wide, or the width of the screen when that is smaller: the
+# macos-26 runner has a 1024 x 768 display at 1x, so its captures are 1024 pixels wide.
+MIN_WIDTH=960
+
+xcrun swiftc -O scripts/window-id.swift -o "$TMP/window-id"
 
 xcodebuild build \
   -project "$PROJECT" \
@@ -43,11 +50,15 @@ fi
 # Rejects missing, small or narrow PNGs, and a capture identical to the previous scene.
 valid_capture() {
   local file="$1" previous="$2" width
-  [ -s "$file" ] || return 1
-  [ "$(wc -c < "$file" | tr -d ' ')" -gt "$MIN_BYTES" ] || return 1
+  local bytes
+  if [ ! -s "$file" ]; then echo "  rejected: no file"; return 1; fi
+  bytes="$(wc -c < "$file" | tr -d ' ')"
   width="$(sips -g pixelWidth "$file" 2>/dev/null | awk '/pixelWidth/ { print $2 }')"
-  [ -n "$width" ] && [ "$width" -ge "$MIN_WIDTH" ] || return 1
+  echo "  capture: ${width:-?} pixels wide, $bytes bytes"
+  [ "$bytes" -gt "$MIN_BYTES" ] || { echo "  rejected: too small"; return 1; }
+  [ -n "$width" ] && [ "$width" -ge "$MIN_WIDTH" ] || { echo "  rejected: too narrow"; return 1; }
   if [ -n "$previous" ] && cmp -s "$file" "$previous"; then
+    echo "  rejected: same as the previous scene"
     return 1
   fi
   return 0
@@ -96,12 +107,13 @@ capture_window() {
   "$BIN" -screenshot "$scene" -screenshot-ready-file "$marker" -ApplePersistenceIgnoreState YES \
     > "$TMP/$scene-window.log" 2>&1 &
   pid=$!
-  if wait_for_ready "$pid" "$marker" 180; then
+  if wait_for_ready "$pid" "$marker" 150; then
     # Let images fade in.
     sleep 3
-    id="$(swift scripts/window-id.swift "$pid" 2>/dev/null || true)"
+    id="$("$TMP/window-id" "$pid" || true)"
     if [ -n "$id" ]; then
-      screencapture -x -o -l "$id" "$file" || true
+      echo "  window $id"
+      screencapture -x -o -l "$id" "$file" || echo "  screencapture exited with $?"
     else
       echo "No window found for $scene"
     fi
@@ -118,7 +130,7 @@ render() {
   "$BIN" -screenshot "$scene" -screenshot-ready-file "$TMP/render-ready-$scene" -render-screenshot "$file" \
     -ApplePersistenceIgnoreState YES > "$TMP/$scene.log" 2>&1 &
   pid=$!
-  wait_for_exit "$pid" 210 || status=$?
+  wait_for_exit "$pid" 180 || status=$?
   tail -n 20 "$TMP/$scene.log" || true
   return "$status"
 }

@@ -70,7 +70,9 @@ final class RadioStore {
             self.countries = countries.filter { !$0.code.isEmpty && $0.stationCount > 0 }
             self.tags = tags.filter { !Self.genericTags.contains($0.name.lowercased()) && $0.name.count > 1 }
             directoryPhase = .loaded
+            screenshotLog("directory: \(self.countries.count) countries, \(self.tags.count) tags")
         } catch {
+            screenshotLog("directory failed: \(error)")
             directoryPhase = .failed(error.localizedDescription)
         }
     }
@@ -94,6 +96,7 @@ final class RadioStore {
         guard current != .loading else { return }
         if current == .loaded, !force { return }
         phases[list] = .loading
+        screenshotLog("loading \(list)")
         do {
             let client = self.client
             var stations = try await Self.retrying(attempts: attempts) {
@@ -109,9 +112,12 @@ final class RadioStore {
             }
             lists[list] = stations
             phases[list] = .loaded
+            screenshotLog("loaded \(list): \(stations.count) stations, \(favicons.loadedCount(in: stations)) favicons")
         } catch is CancellationError {
+            screenshotLog("cancelled \(list)")
             phases[list] = .idle
         } catch {
+            screenshotLog("failed \(list): \(error)")
             phases[list] = .failed(error.localizedDescription)
         }
     }
