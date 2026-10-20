@@ -79,12 +79,12 @@ final class FaviconStore {
         var index = 0
         while index < urls.count {
             let batch = urls[index..<min(index + concurrency, urls.count)]
-            await withTaskGroup(of: Void.self) { group in
-                for url in batch {
-                    group.addTask { @MainActor in
-                        _ = await self.load(url)
-                    }
-                }
+            // Plain tasks on the main actor; the loads themselves run off it.
+            let loads = batch.map { url in
+                Task { await self.load(url) }
+            }
+            for load in loads {
+                _ = await load.value
             }
             index += concurrency
         }

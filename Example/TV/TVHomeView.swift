@@ -88,12 +88,11 @@ struct TVHomeView: View {
         // The first rail first, so the screen fills quickly; the rest together.
         let store = self.store
         await store.load(.topClicked, force: force)
-        await withTaskGroup(of: Void.self) { group in
-            for rail in TVRail.allCases.dropFirst() {
-                group.addTask { @MainActor in
-                    await store.load(rail.list, force: force)
-                }
-            }
+        let loads = TVRail.allCases.dropFirst().map { rail in
+            Task { await store.load(rail.list, force: force) }
+        }
+        for load in loads {
+            await load.value
         }
     }
 
