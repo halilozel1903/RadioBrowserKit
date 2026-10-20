@@ -97,7 +97,7 @@ struct TVStationRail: View {
                     }
                 }
                 .padding(.horizontal, 80)
-                .padding(.vertical, 30)
+                .padding(.vertical, 26)
             }
             .scrollIndicators(.hidden)
             // Focused cards grow; let them draw outside the rail.
@@ -111,7 +111,7 @@ struct TVStationRail: View {
 /// move the logo and never the text: the name and country sit below it.
 struct TVStationCard: View {
     let station: Station
-    static let side: CGFloat = 250
+    static let side: CGFloat = 220
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {

@@ -48,6 +48,8 @@ struct TVHomeView: View {
                         .padding(.bottom, 60)
                 }
                 .padding(.top, 10)
+                // Room below the last row on screen, so its captions end above the clipped edge.
+                .padding(.bottom, 40)
             }
             // The header stays put above the rails; clip the scroll view so cards scrolled up
             // don't draw over it.
